@@ -1,0 +1,24 @@
+[package]
+name = "storm"
+description = "Meta-package manager for isolated applications"
+version = "0.1.0"
+authors = ["Milkey Mouse <milkeymouse@meme.institute>"]
+edition = "2018"
+repository = "https://github.com/milkey-mouse/storm"
+readme = "README.md"
+license = "CC0-1.0"
+categories = [
+    "command-line-utilities",
+    "filesystem"
+]
+keywords = [
+    "storm",
+    "package-manager",
+    "stormpkg",
+    "portage",
+    "ports"
+]
+maintenance = { status = "experimental" }
+
+[dependencies]
+clap = "2.33.0"
