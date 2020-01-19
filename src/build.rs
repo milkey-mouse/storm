@@ -1,4 +1,4 @@
-use super::{SubCommand, package::Package};
+use super::package::Package;
 use clap::{App, Arg, ArgMatches};
 use std::error::Error;
 
@@ -20,4 +20,4 @@ fn run(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub static CMD: SubCommand = SubCommand { args, run };
+pub static CMD: crate::SubCommand = crate::SubCommand { args, run };
