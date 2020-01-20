@@ -1,5 +1,4 @@
-use super::repo::RepoConfig;
-use super::sandbox::SandboxConfig;
+use crate::{repo::RepoConfig, sandbox::SandboxConfig};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use lazy_static::lazy_static;
 use phf::phf_map;
@@ -34,6 +33,7 @@ pub struct Config {
     pub repo: RepoConfig,
 }
 
+// TODO: find every place a destructive action is happening and prompt y/n if at a terminal
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CliConfig {
     pub prompt: bool,
@@ -135,7 +135,7 @@ fn set(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
         .parse()
         .map(|p| match p {
             Value::Table(mut tbl) => tbl.get_mut("x").unwrap().clone(),
-            _ => panic!(),
+            _ => unreachable!(),
         })
         .or_else(|_| -> Result<_, Box<dyn Error>> {
             // fall back to treating the value as a literal string
@@ -231,7 +231,7 @@ fn args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         )
 }
 
-static SUBCOMMANDS: phf::Map<&'static str, crate::SubCommandFn> = phf_map! {
+static SUBCOMMANDS: phf::Map<&'static str, crate::SubCommandFn<()>> = phf_map! {
     "get" => get,
     "set" => set,
     "unset" => unset,
@@ -243,4 +243,4 @@ fn run(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     crate::run_subcommand(&SUBCOMMANDS, args)
 }
 
-pub static CMD: crate::SubCommand = crate::SubCommand { args, run };
+pub static CMD: crate::SubCommand<()> = crate::SubCommand { args, run };

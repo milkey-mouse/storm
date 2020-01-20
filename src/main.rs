@@ -23,20 +23,21 @@ mod repo;
 mod sandbox;
 mod uninstall;
 
-pub type SubCommandFn = fn(&ArgMatches) -> Result<(), Box<dyn Error>>;
+pub type SubCommandArgs = for<'a, 'b> fn(App<'a, 'b>) -> App<'a, 'b>;
+pub type SubCommandFn<T> = fn(&ArgMatches) -> Result<T, Box<dyn Error>>;
 
-pub struct SubCommand {
-    pub args: for<'a, 'b> fn(App<'a, 'b>) -> App<'a, 'b>,
-    pub run: SubCommandFn,
+pub struct SubCommand<T> {
+    pub args: SubCommandArgs,
+    pub run: SubCommandFn<T>,
 }
 
-impl Borrow<SubCommandFn> for &SubCommand {
-    fn borrow(&self) -> &SubCommandFn {
+impl<T> Borrow<SubCommandFn<T>> for &SubCommand<T> {
+    fn borrow(&self) -> &SubCommandFn<T> {
         &self.run
     }
 }
 
-static SUBCOMMANDS: phf::Map<&'static str, &'static SubCommand> = phf_map! {
+static SUBCOMMANDS: phf::Map<&'static str, &'static SubCommand<()>> = phf_map! {
     "build" => &build::CMD,
     "config" => &config::CMD,
     "install" => &install::CMD,
@@ -123,10 +124,10 @@ fn main() {
     });
 }
 
-pub fn run_subcommand<T: Borrow<SubCommandFn>>(
+pub fn run_subcommand<R, T: Borrow<fn(&ArgMatches) -> Result<R, Box<dyn Error>>>>(
     subcommands: &phf::Map<&'static str, T>,
     args: &ArgMatches,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<R, Box<dyn Error>> {
     if let (subcommand, Some(subcommand_args)) = args.subcommand() {
         subcommands
             .get(subcommand)

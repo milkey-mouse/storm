@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct Repo {
+pub struct GentooRepo {
     location: PathBuf,
     sync_type: SyncType,
     sync_uri: String,

@@ -1,4 +1,4 @@
-use super::package::Package;
+use crate::package::Package;
 use clap::{App, Arg, ArgMatches};
 use std::error::Error;
 
@@ -12,7 +12,7 @@ fn args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 }
 
 fn run(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
-    let packages = args
+    let _packages = args
         .values_of("package")
         .unwrap()
         .map(Package::parse)
@@ -20,4 +20,4 @@ fn run(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub static CMD: crate::SubCommand = crate::SubCommand { args, run };
+pub static CMD: crate::SubCommand<()> = crate::SubCommand { args, run };
