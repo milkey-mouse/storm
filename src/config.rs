@@ -22,6 +22,9 @@ quick_error! {
         NoSuchKey(path: String) {
             display("there is no key '{}' in the configuration file", path)
         }
+        EditCancelled {
+            display("configuration edit cancelled")
+        }
     }
 }
 
@@ -191,6 +194,30 @@ fn show(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn edit(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
+    let config = Config::load_raw(args.value_of_os("file"))?.try_into::<Config>()?;
+
+    let mut edited_raw = toml::to_string_pretty(&config)?;
+    let mut error_header = String::new();
+    let edited = loop {
+        edited_raw = edit::edit(edited_raw)?.trim_start_matches(&error_header).to_string();
+        if edited_raw.trim_end_matches("\n").is_empty() {
+            return Err(Box::new(ConfigError::EditCancelled));
+        } else {
+            match toml::from_str(&edited_raw).and_then(Value::try_into::<Config>) {
+                Ok(edited) => break edited,
+                // TODO: prompt for re-edit
+                Err(e) => {
+                    error_header = format!("# problem in edited config: {}\n# clear this file to cancel editing\n\n", e);
+                    edited_raw.insert_str(0, &error_header);
+                }
+            }
+        }
+    };
+
+    Config::save_raw(args.value_of_os("file"), &edited)
+}
+
 fn reset(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     Config::save_raw(args.value_of_os("file"), &Config::default())
 }
@@ -232,6 +259,10 @@ fn args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
                 )),
         )
         .subcommand(
+            SubCommand::with_name("edit")
+                .about("Edit the configuration file in the default editor"),
+        )
+        .subcommand(
             SubCommand::with_name("reset")
                 .about("Replace all configuration options with their default values"),
         )
@@ -242,6 +273,7 @@ static SUBCOMMANDS: phf::Map<&'static str, crate::SubCommandFn<()>> = phf_map! {
     "set" => set,
     "unset" => unset,
     "show" => show,
+    "edit" => edit,
     "reset" => reset,
 };
 
