@@ -221,7 +221,8 @@ fn args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
         .subcommand(
             SubCommand::with_name("unset")
                 .about("Remove/reset an option from the configuration")
-                .arg(Arg::with_name("key").required(true).index(1)),
+                .arg(Arg::with_name("key").required(true).index(1))
+                .alias("del"),
         )
         .subcommand(
             SubCommand::with_name("show")
