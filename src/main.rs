@@ -61,7 +61,7 @@ fn main() {
                         .takes_value(true)
                         .validator_os(|x| {
                             if x.is_empty() {
-                                Err(OsString::from("Store path is undefined/empty"))
+                                Err(OsString::from("store path is undefined/empty"))
                             } else {
                                 let p = Path::new(x);
                                 if p.is_dir() {
@@ -76,7 +76,7 @@ fn main() {
                                         Ok(()) => Ok(()),
                                         Err(_) => {
                                             let mut err_string =
-                                                OsString::from("Couldn't create store directory '");
+                                                OsString::from("couldn't create store directory '");
                                             err_string.push(p);
                                             err_string.push("'");
                                             Err(err_string)
@@ -84,7 +84,7 @@ fn main() {
                                     }
                                 } else {
                                     let mut err_string =
-                                        OsString::from("Parent directory of store path '");
+                                        OsString::from("parent directory of store path '");
                                     err_string.push(p);
                                     err_string.push("' doesn't exist");
                                     Err(err_string)

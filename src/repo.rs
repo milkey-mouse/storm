@@ -12,7 +12,7 @@ quick_error! {
     #[derive(Debug)]
     pub enum RepoError {
         NoSuchRepo {
-            description("No repo exists with the specified name")
+            display("no repo exists with the specified name")
         }
     }
 }

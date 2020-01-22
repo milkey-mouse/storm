@@ -17,10 +17,10 @@ quick_error! {
     #[derive(Debug)]
     pub enum ConfigError {
         NoConfigFile {
-            description("No config file was defined; specify --file or at least set $HOME")
+            display("no config file was defined; specify --file or at least set $HOME")
         }
-        NoSuchKey {
-            description("No such option exists in the configuration file")
+        NoSuchKey(path: String) {
+            display("there is no key '{}' in the configuration file", path)
         }
     }
 }
@@ -100,14 +100,19 @@ fn find_key<'a>(
                 if create && !tbl.contains_key(leaf) {
                     tbl.insert(leaf.to_string(), Value::Table(Table::new()));
                 }
-                tbl.get_mut(leaf).ok_or(ConfigError::NoSuchKey)?
+                tbl.get_mut(leaf)
+                    .ok_or_else(|| ConfigError::NoSuchKey(leaf.to_string()))?
             }
             Value::Array(arr) => arr
-                .get_mut(leaf.parse::<usize>().or(Err(ConfigError::NoSuchKey))?)
-                .ok_or(ConfigError::NoSuchKey)?,
-            _ => return Err(Box::new(ConfigError::NoSuchKey)),
+                .get_mut(
+                    leaf.parse::<usize>()
+                        .or_else(|_| Err(ConfigError::NoSuchKey(leaf.to_string())))?,
+                )
+                .ok_or_else(|| ConfigError::NoSuchKey(leaf.to_string()))?,
+            _ => return Err(Box::new(ConfigError::NoSuchKey(leaf.to_string()))),
         };
     }
+
     Ok(ptr)
 }
 
@@ -164,10 +169,10 @@ fn unset(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
 
     if let Value::Table(tbl) = key_parent {
         if let None = tbl.remove(key_name) {
-            return Err(Box::new(ConfigError::NoSuchKey));
+            return Err(Box::new(ConfigError::NoSuchKey(key_name.to_string())));
         }
     } else {
-        return Err(Box::new(ConfigError::NoSuchKey));
+        return Err(Box::new(ConfigError::NoSuchKey(key_parent.to_string())));
     }
 
     Config::save_raw(args.value_of_os("file"), &config)
