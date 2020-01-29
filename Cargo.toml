@@ -23,9 +23,13 @@ maintenance = { status = "experimental" }
 [profile.release]
 lto = true
 
+[features]
+default = ["interactive"]
+interactive = ["edit"]
+
 [dependencies]
 clap = "2.33.0"
-edit = "0.1.1"
+edit = { version = "0.1.1", optional = true }
 lazy_static = "1.4.0"
 nix = "0.16.1"
 phf = { version = "0.8.0", features = ["macros"] }

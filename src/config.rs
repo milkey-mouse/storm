@@ -194,21 +194,30 @@ fn show(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[cfg(feature = "interactive")]
 fn edit(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     let config = Config::load_raw(args.value_of_os("file"))?.try_into::<Config>()?;
 
     let mut edited_raw = toml::to_string_pretty(&config)?;
     let mut error_header = String::new();
     let edited = loop {
-        edited_raw = edit::edit(edited_raw)?.trim_start_matches(&error_header).to_string();
+        edited_raw = edit::edit(edited_raw)?
+            .trim_start_matches(&error_header)
+            .to_string();
         if edited_raw.trim_end_matches("\n").is_empty() {
             return Err(Box::new(ConfigError::EditCancelled));
         } else {
-            match toml::from_str(&edited_raw).and_then(Value::try_into::<Config>) {
+            match toml::from_str(&edited_raw)
+                .and_then(Value::try_into::<Config>)
+                .map_err(Box::new)
+            {
                 Ok(edited) => break edited,
                 // TODO: prompt for re-edit
                 Err(e) => {
-                    error_header = format!("# problem in edited config: {}\n# clear this file to cancel editing\n\n", e);
+                    error_header = format!(
+                        "# problem in edited config: {}\n# clear this file to cancel editing\n\n",
+                        e
+                    );
                     edited_raw.insert_str(0, &error_header);
                 }
             }
@@ -223,7 +232,8 @@ fn reset(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
 }
 
 fn args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-    app.about("Get and set configuration options")
+    let app = app
+        .about("Get and set configuration options")
         .setting(AppSettings::SubcommandRequired)
         .arg(
             Arg::with_name("file")
@@ -257,23 +267,38 @@ fn args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
                 .arg(Arg::with_name("raw").short("r").long("raw").help(
                     "Show the entire config, even parts irrelevant to this version of storm",
                 )),
-        )
-        .subcommand(
+        );
+
+    if cfg!(feature = "interactive") {
+        app.subcommand(
             SubCommand::with_name("edit")
                 .about("Edit the configuration file in the default editor"),
         )
-        .subcommand(
-            SubCommand::with_name("reset")
-                .about("Replace all configuration options with their default values"),
-        )
+    } else {
+        app
+    }
+    .subcommand(
+        SubCommand::with_name("reset")
+            .about("Replace all configuration options with their default values"),
+    )
 }
 
+#[cfg(feature = "interactive")]
 static SUBCOMMANDS: phf::Map<&'static str, crate::SubCommandFn<()>> = phf_map! {
     "get" => get,
     "set" => set,
     "unset" => unset,
     "show" => show,
     "edit" => edit,
+    "reset" => reset,
+};
+
+#[cfg(not(feature = "interactive"))]
+static SUBCOMMANDS: phf::Map<&'static str, crate::SubCommandFn<()>> = phf_map! {
+    "get" => get,
+    "set" => set,
+    "unset" => unset,
+    "show" => show,
     "reset" => reset,
 };
 
