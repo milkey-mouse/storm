@@ -6,6 +6,8 @@ use serde::{
     de::{self, SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize,
 };
+#[cfg(feature = "interactive")]
+use serde_diff::{simple_serde_diff, SerdeDiff};
 use std::{borrow::Borrow, collections::HashMap, error::Error, fmt, iter, marker::PhantomData};
 
 quick_error! {
@@ -20,12 +22,16 @@ quick_error! {
 mod dummy;
 mod gentoo;
 
+// TODO: Data::Enum is not supported by serde_diff
+#[cfg_attr(feature = "interactive", derive(Clone, PartialEq/*, SerdeDiff*/))]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase", tag = "type")]
 enum Repo {
     Dummy(dummy::DummyRepo),
     Gentoo(gentoo::GentooRepo),
 }
+
+simple_serde_diff!(Repo);
 
 static ADD_SUBCOMMANDS: phf::Map<&'static str, &'static crate::SubCommand<Repo>> = phf_map! {
     "dummy" => &dummy::CMD,
@@ -63,6 +69,7 @@ where
     deserializer.deserialize_any(StringOrSeq(PhantomData))
 }
 
+#[cfg_attr(feature = "interactive", derive(Clone, PartialEq, SerdeDiff))]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct RepoConfig {
     #[serde(deserialize_with = "string_or_seq", rename = "default")]

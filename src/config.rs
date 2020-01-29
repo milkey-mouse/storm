@@ -4,6 +4,8 @@ use lazy_static::lazy_static;
 use phf::phf_map;
 use quick_error::quick_error;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "interactive")]
+use serde_diff::{Diff, SerdeDiff};
 use std::{
     env,
     error::Error,
@@ -12,6 +14,18 @@ use std::{
     path::{Path, PathBuf},
 };
 use toml::value::{Table, Value};
+
+/*#[cfg(feature = "interactive")]
+#[derive(Debug, Default, PartialEq, SerdeDiff, Serialize, Deserialize)]
+enum DiffableValue<'a> {
+    String(&'a str),
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+    Datetime(Datetime),
+    Array(Vec<DiffableValue<'a>>),
+    Table(BTreeMap<K, V>),
+}*/
 
 quick_error! {
     #[derive(Debug)]
@@ -28,21 +42,50 @@ quick_error! {
     }
 }
 
+#[cfg_attr(feature = "interactive", derive(Clone, PartialEq, SerdeDiff))]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub cli: CliConfig,
     pub sandbox: SandboxConfig,
     pub repo: RepoConfig,
+
+    #[cfg(feature = "interactive")]
+    #[serde(skip)]
+    #[serde_diff(skip)]
+    old_config: Option<Box<Self>>,
 }
 
 // TODO: find every place a destructive action is happening and prompt y/n if at a terminal
+#[cfg_attr(feature = "interactive", derive(Clone, PartialEq, SerdeDiff))]
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CliConfig {
     pub prompt: bool,
 }
 
 impl Config {
+    #[cfg(feature = "interactive")]
+    fn prompt(&self) -> Result<(), Box<dyn Error>> {
+        match &self.old_config {
+            Some(old) if old.cli.prompt => {
+                let diff = Diff::serializable(old.as_ref(), &self);
+                dbg!(serde_json::to_string(&diff).unwrap());
+
+                if diff.has_changes() {
+                    Err(Box::new(ConfigError::EditCancelled))
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        }
+    }
+
+    #[cfg(not(feature = "interactive"))]
+    fn prompt(&self) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
     fn get_path<'a, P: AsRef<Path>>(path: &'a Option<P>) -> Result<&'a Path, Box<dyn Error>> {
         path.as_ref()
             .map(|p| p.as_ref())
@@ -60,6 +103,17 @@ impl Config {
         }
     }
 
+    #[cfg(feature = "interactive")]
+    pub fn load() -> Result<Config, Box<dyn Error>> {
+        let config: Config = Self::load_raw::<PathBuf>(None)?.try_into()?;
+
+        Ok(Self {
+            old_config: Some(Box::new(config.clone())),
+            ..config
+        })
+    }
+
+    #[cfg(not(feature = "interactive"))]
     pub fn load() -> Result<Config, Box<dyn Error>> {
         Ok(Self::load_raw::<PathBuf>(None)?.try_into()?)
     }
@@ -67,7 +121,13 @@ impl Config {
     pub(self) fn save_raw<P: AsRef<Path>, T: Serialize + ?Sized>(
         path: Option<P>,
         config: &T,
+        _old_config: Option<&T>,
     ) -> Result<(), Box<dyn Error>> {
+        // TODO: impl toml::Serialize for toml::Value
+        //if let Some(old) = old_config {
+        //    Self::prompt_raw(old, config)?;
+        //}
+
         let mut config_file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -78,7 +138,8 @@ impl Config {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn Error>> {
-        Self::save_raw::<PathBuf, _>(None, self.into())
+        self.prompt()?;
+        Self::save_raw::<PathBuf, _>(None, self.into(), None)
     }
 }
 
@@ -136,6 +197,13 @@ fn get(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
 
 fn set(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     let mut config = Config::load_raw(args.value_of_os("file"))?;
+    let old_config = if cfg!(feature = "interactive") {
+        Some(config.clone())
+    } else {
+        None
+    };
+
+    // TODO: use toml_query library
 
     // the TOML parser seems to want complete key-value pairings
     let raw_value = args.value_of("value").unwrap();
@@ -154,11 +222,16 @@ fn set(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
 
     *key = value;
 
-    Config::save_raw(args.value_of_os("file"), &config)
+    Config::save_raw(args.value_of_os("file"), &config, old_config.as_ref())
 }
 
 fn unset(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     let mut config = Config::load_raw(args.value_of_os("file"))?;
+    let old_config = if cfg!(feature = "interactive") {
+        Some(config.clone())
+    } else {
+        None
+    };
 
     let key_path = args.value_of("key").unwrap();
     let (key_parent, key_name) = if let Some(idx) = key_path.rfind(".") {
@@ -178,7 +251,7 @@ fn unset(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
         return Err(Box::new(ConfigError::NoSuchKey(key_parent.to_string())));
     }
 
-    Config::save_raw(args.value_of_os("file"), &config)
+    Config::save_raw(args.value_of_os("file"), &config, old_config.as_ref())
 }
 
 fn show(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
@@ -224,11 +297,22 @@ fn edit(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
         }
     };
 
-    Config::save_raw(args.value_of_os("file"), &edited)
+    Config::save_raw(args.value_of_os("file"), &edited, Some(&config))
 }
 
 fn reset(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
-    Config::save_raw(args.value_of_os("file"), &Config::default())
+    let old_config = Config::load_raw(args.value_of_os("file"))
+        .and_then(|v| {
+            v.try_into::<Config>()
+                .map_err(|e| Box::new(e) as Box<dyn Error>)
+        })
+        .ok();
+
+    Config::save_raw(
+        args.value_of_os("file"),
+        &Config::default(),
+        old_config.as_ref(),
+    )
 }
 
 fn args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {

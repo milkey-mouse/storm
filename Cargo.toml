@@ -35,4 +35,6 @@ nix = "0.16.1"
 phf = { version = "0.8.0", features = ["macros"] }
 quick-error = "1.2.3"
 serde = { version = "1.0.104", features = ["derive"] }
+serde-diff = { git = "https://github.com/amethyst/serde-diff.git" }
 toml = { version = "0.5.6", features = ["preserve_order"] }
+serde_json = "1.0" # TODO: temporary, for debugging
